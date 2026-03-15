@@ -1,0 +1,1036 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>VoxShift – Changeur de Voix</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=Space+Mono:wght@400;700&display=swap');
+
+  :root {
+    --bg: #0a0a0f;
+    --surface: #12121a;
+    --card: #1a1a26;
+    --border: #2a2a3e;
+    --accent: #7c3aed;
+    --accent2: #06b6d4;
+    --accent3: #f59e0b;
+    --text: #e8e6f0;
+    --muted: #6b6880;
+    --danger: #ef4444;
+    --success: #10b981;
+    --glow: rgba(124,58,237,0.3);
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+
+  body {
+    font-family: 'Space Mono', monospace;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Animated background */
+  body::before {
+    content: '';
+    position: fixed;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(ellipse at 30% 20%, rgba(124,58,237,0.08) 0%, transparent 50%),
+                radial-gradient(ellipse at 70% 80%, rgba(6,182,212,0.06) 0%, transparent 50%);
+    animation: bgPulse 8s ease-in-out infinite alternate;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  @keyframes bgPulse {
+    0% { transform: scale(1) rotate(0deg); }
+    100% { transform: scale(1.1) rotate(5deg); }
+  }
+
+  .container {
+    position: relative;
+    z-index: 1;
+    max-width: 480px;
+    margin: 0 auto;
+    padding: 0 16px 100px;
+  }
+
+  /* Header */
+  header {
+    padding: 24px 0 16px;
+    text-align: center;
+  }
+
+  .logo {
+    font-family: 'Syne', sans-serif;
+    font-size: 28px;
+    font-weight: 800;
+    letter-spacing: -1px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .logo span { color: var(--accent3); -webkit-text-fill-color: var(--accent3); }
+
+  .tagline {
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-top: 4px;
+  }
+
+  /* Status bar */
+  .status-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 12px 16px;
+    margin: 16px 0;
+  }
+
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--muted);
+    margin-right: 8px;
+  }
+
+  .status-dot.active {
+    background: var(--success);
+    box-shadow: 0 0 8px var(--success);
+    animation: blink 1.2s ease-in-out infinite;
+  }
+
+  .status-dot.recording {
+    background: var(--danger);
+    box-shadow: 0 0 8px var(--danger);
+    animation: blink 0.6s ease-in-out infinite;
+  }
+
+  @keyframes blink {
+    0%,100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  .status-text { font-size: 12px; color: var(--muted); }
+  .status-text.active { color: var(--success); }
+  .status-text.recording { color: var(--danger); }
+
+  .latency {
+    font-size: 11px;
+    color: var(--muted);
+    font-family: 'Space Mono', monospace;
+  }
+
+  /* Visualizer */
+  .visualizer-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 16px;
+    margin-bottom: 16px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .visualizer-label {
+    font-size: 10px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 10px;
+  }
+
+  canvas#viz {
+    width: 100%;
+    height: 80px;
+    display: block;
+    border-radius: 8px;
+  }
+
+  .pitch-display {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 10px;
+  }
+
+  .pitch-val {
+    font-family: 'Syne', sans-serif;
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--accent2);
+  }
+
+  .effect-badge {
+    font-size: 10px;
+    background: rgba(124,58,237,0.2);
+    color: #a78bfa;
+    border: 1px solid rgba(124,58,237,0.4);
+    border-radius: 20px;
+    padding: 3px 10px;
+    letter-spacing: 1px;
+  }
+
+  /* Voice presets grid */
+  .section-title {
+    font-size: 10px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 12px;
+  }
+
+  .voices-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+
+  .voice-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 8px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .voice-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    transition: opacity 0.2s;
+    border-radius: 12px;
+  }
+
+  .voice-card.active {
+    border-color: var(--accent);
+    box-shadow: 0 0 16px rgba(124,58,237,0.3), inset 0 0 20px rgba(124,58,237,0.05);
+  }
+
+  .voice-card:active { transform: scale(0.96); }
+
+  .voice-icon {
+    font-size: 26px;
+    margin-bottom: 6px;
+    display: block;
+    line-height: 1;
+  }
+
+  .voice-name {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--text);
+    letter-spacing: 0.5px;
+  }
+
+  .voice-sub {
+    font-size: 9px;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+
+  /* Color variants for voice cards */
+  .voice-card[data-color="purple"].active { border-color: #7c3aed; box-shadow: 0 0 16px rgba(124,58,237,0.4); }
+  .voice-card[data-color="cyan"].active { border-color: #06b6d4; box-shadow: 0 0 16px rgba(6,182,212,0.4); }
+  .voice-card[data-color="amber"].active { border-color: #f59e0b; box-shadow: 0 0 16px rgba(245,158,11,0.4); }
+  .voice-card[data-color="red"].active { border-color: #ef4444; box-shadow: 0 0 16px rgba(239,68,68,0.4); }
+  .voice-card[data-color="green"].active { border-color: #10b981; box-shadow: 0 0 16px rgba(16,185,129,0.4); }
+  .voice-card[data-color="pink"].active { border-color: #ec4899; box-shadow: 0 0 16px rgba(236,72,153,0.4); }
+
+  /* Parameters */
+  .params-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+
+  .param-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+
+  .param-row:last-child { margin-bottom: 0; }
+
+  .param-label {
+    font-size: 11px;
+    color: var(--muted);
+    width: 70px;
+    flex-shrink: 0;
+    letter-spacing: 0.5px;
+  }
+
+  .param-slider {
+    flex: 1;
+    -webkit-appearance: none;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--border);
+    outline: none;
+    cursor: pointer;
+  }
+
+  .param-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 8px rgba(124,58,237,0.5);
+    cursor: pointer;
+    transition: transform 0.1s;
+  }
+
+  .param-slider:active::-webkit-slider-thumb { transform: scale(1.3); }
+
+  .param-val {
+    font-size: 11px;
+    color: var(--accent2);
+    width: 32px;
+    text-align: right;
+    font-family: 'Space Mono', monospace;
+  }
+
+  /* Effects toggles */
+  .effects-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+  }
+
+  .effect-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 6px 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.5px;
+  }
+
+  .effect-toggle.on {
+    border-color: var(--accent2);
+    color: var(--accent2);
+    background: rgba(6,182,212,0.1);
+  }
+
+  .effect-toggle .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--muted);
+  }
+
+  .effect-toggle.on .dot {
+    background: var(--accent2);
+    box-shadow: 0 0 6px var(--accent2);
+  }
+
+  /* Big record button */
+  .record-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin: 24px 0 16px;
+  }
+
+  .record-btn {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    border: 3px solid var(--accent);
+    background: rgba(124,58,237,0.15);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    position: relative;
+    box-shadow: 0 0 30px rgba(124,58,237,0.2);
+  }
+
+  .record-btn:active { transform: scale(0.93); }
+
+  .record-btn.recording {
+    border-color: var(--danger);
+    background: rgba(239,68,68,0.15);
+    box-shadow: 0 0 30px rgba(239,68,68,0.3);
+    animation: recordPulse 1s ease-in-out infinite;
+  }
+
+  @keyframes recordPulse {
+    0%,100% { box-shadow: 0 0 20px rgba(239,68,68,0.3); }
+    50% { box-shadow: 0 0 40px rgba(239,68,68,0.6); }
+  }
+
+  .record-inner {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--accent);
+    transition: all 0.2s;
+  }
+
+  .record-btn.recording .record-inner {
+    border-radius: 6px;
+    background: var(--danger);
+    width: 24px;
+    height: 24px;
+  }
+
+  .record-hint {
+    margin-top: 10px;
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 1px;
+  }
+
+  /* Mode tabs */
+  .mode-tabs {
+    display: flex;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 4px;
+    margin-bottom: 16px;
+    gap: 4px;
+  }
+
+  .mode-tab {
+    flex: 1;
+    text-align: center;
+    padding: 8px 4px;
+    border-radius: 8px;
+    font-size: 10px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .mode-tab.active {
+    background: var(--accent);
+    color: white;
+  }
+
+  /* Live call info banner */
+  .call-banner {
+    display: none;
+    align-items: center;
+    gap: 10px;
+    background: rgba(16,185,129,0.1);
+    border: 1px solid rgba(16,185,129,0.3);
+    border-radius: 12px;
+    padding: 10px 14px;
+    margin-bottom: 16px;
+    font-size: 12px;
+    color: var(--success);
+  }
+
+  .call-banner.visible { display: flex; }
+
+  .call-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: rgba(16,185,129,0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    flex-shrink: 0;
+  }
+
+  /* Toast */
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(80px);
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 10px 20px;
+    font-size: 12px;
+    color: var(--text);
+    transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1);
+    z-index: 999;
+    white-space: nowrap;
+  }
+
+  .toast.show { transform: translateX(-50%) translateY(0); }
+
+  /* Bottom nav */
+  .bottom-nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: rgba(10,10,15,0.95);
+    backdrop-filter: blur(20px);
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: space-around;
+    padding: 10px 0 max(10px, env(safe-area-inset-bottom));
+    z-index: 100;
+  }
+
+  .nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    cursor: pointer;
+    padding: 4px 16px;
+    border-radius: 10px;
+    transition: all 0.2s;
+    color: var(--muted);
+  }
+
+  .nav-item.active { color: var(--accent); }
+
+  .nav-icon { font-size: 20px; line-height: 1; }
+  .nav-label { font-size: 9px; letter-spacing: 1px; text-transform: uppercase; }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  /* Permission modal */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.8);
+    z-index: 200;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+
+  .modal-overlay.show { display: flex; }
+
+  .modal {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 28px 24px;
+    max-width: 360px;
+    width: 100%;
+    text-align: center;
+  }
+
+  .modal-icon { font-size: 48px; margin-bottom: 16px; }
+  .modal-title { font-family: 'Syne', sans-serif; font-size: 20px; font-weight: 700; margin-bottom: 8px; }
+  .modal-text { font-size: 13px; color: var(--muted); line-height: 1.6; margin-bottom: 24px; }
+
+  .btn-primary {
+    width: 100%;
+    padding: 14px;
+    border: none;
+    border-radius: 12px;
+    background: var(--accent);
+    color: white;
+    font-family: 'Space Mono', monospace;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .btn-primary:active { transform: scale(0.97); opacity: 0.9; }
+  .btn-secondary {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: transparent;
+    color: var(--muted);
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    cursor: pointer;
+    margin-top: 10px;
+    transition: all 0.2s;
+  }
+
+  /* Rec timer */
+  .rec-timer {
+    font-family: 'Syne', sans-serif;
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--danger);
+    text-align: center;
+    display: none;
+    margin-bottom: 8px;
+    letter-spacing: 2px;
+  }
+
+  .rec-timer.show { display: block; }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <div class="logo">Vox<span>Shift</span></div>
+    <div class="tagline">Changeur de voix en temps réel</div>
+  </header>
+
+  <!-- Status Bar -->
+  <div class="status-bar">
+    <div style="display:flex;align-items:center;">
+      <div class="status-dot" id="statusDot"></div>
+      <span class="status-text" id="statusText">Inactif</span>
+    </div>
+    <span class="latency" id="latency">-- ms</span>
+  </div>
+
+  <!-- Mode Tabs -->
+  <div class="mode-tabs">
+    <div class="mode-tab active" onclick="setMode('micro')" id="tab-micro">🎙 Micro</div>
+    <div class="mode-tab" onclick="setMode('appel')" id="tab-appel">📞 Appel</div>
+    <div class="mode-tab" onclick="setMode('video')" id="tab-video">🎥 Vidéo</div>
+  </div>
+
+  <!-- Live Call Banner (shown in call mode) -->
+  <div class="call-banner" id="callBanner">
+    <div class="call-avatar">👤</div>
+    <div>
+      <div style="font-weight:700;font-size:13px;">Appel en cours</div>
+      <div style="font-size:11px;color:#34d399;" id="callTimer">00:00</div>
+    </div>
+    <div style="margin-left:auto;font-size:20px;cursor:pointer;" onclick="endCall()">📵</div>
+  </div>
+
+  <!-- Visualizer -->
+  <div class="visualizer-wrap">
+    <div class="visualizer-label">Visualiseur audio</div>
+    <canvas id="viz" width="448" height="80"></canvas>
+    <div class="pitch-display">
+      <div>
+        <span style="font-size:10px;color:var(--muted);">PITCH ACTUEL</span>
+        <div class="pitch-val" id="pitchVal">0.0x</div>
+      </div>
+      <div class="effect-badge" id="effectBadge">NORMAL</div>
+      <div>
+        <span style="font-size:10px;color:var(--muted);">VOLUME</span>
+        <div class="pitch-val" id="volVal">0 dB</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Voice Presets -->
+  <div class="section-title">Préréglages de voix</div>
+  <div class="voices-grid" id="voicesGrid">
+    <div class="voice-card active" data-color="purple" onclick="selectVoice(this,'Normal','0.0x',1.0,1.0,false,false)">
+      <span class="voice-icon">🎤</span>
+      <div class="voice-name">Normal</div>
+      <div class="voice-sub">Original</div>
+    </div>
+    <div class="voice-card" data-color="cyan" onclick="selectVoice(this,'Robot','2.1x',1.8,0.5,true,false)">
+      <span class="voice-icon">🤖</span>
+      <div class="voice-name">Robot</div>
+      <div class="voice-sub">+Robot</div>
+    </div>
+    <div class="voice-card" data-color="amber" onclick="selectVoice(this,'Grave','−0.8x',0.5,1.4,false,false)">
+      <span class="voice-icon">👹</span>
+      <div class="voice-name">Grave</div>
+      <div class="voice-sub">−Pitch</div>
+    </div>
+    <div class="voice-card" data-color="pink" onclick="selectVoice(this,'Enfant','1.8x',1.8,0.7,false,false)">
+      <span class="voice-icon">👶</span>
+      <div class="voice-name">Enfant</div>
+      <div class="voice-sub">+Pitch</div>
+    </div>
+    <div class="voice-card" data-color="green" onclick="selectVoice(this,'Écho','0.2x',1.1,1.0,false,true)">
+      <span class="voice-icon">🌀</span>
+      <div class="voice-name">Écho</div>
+      <div class="voice-sub">+Reverb</div>
+    </div>
+    <div class="voice-card" data-color="red" onclick="selectVoice(this,'Alien','3.0x',2.2,0.4,true,true)">
+      <span class="voice-icon">👽</span>
+      <div class="voice-name">Alien</div>
+      <div class="voice-sub">Max FX</div>
+    </div>
+    <div class="voice-card" data-color="amber" onclick="selectVoice(this,'Géant','−1.5x',0.3,1.6,false,true)">
+      <span class="voice-icon">🦁</span>
+      <div class="voice-name">Géant</div>
+      <div class="voice-sub">Ultra bas</div>
+    </div>
+    <div class="voice-card" data-color="cyan" onclick="selectVoice(this,'Fée','2.5x',2.0,0.6,false,false)">
+      <span class="voice-icon">🧚</span>
+      <div class="voice-name">Fée</div>
+      <div class="voice-sub">Haut+doux</div>
+    </div>
+    <div class="voice-card" data-color="purple" onclick="selectVoice(this,'Spectre','1.2x',1.3,0.9,true,true)">
+      <span class="voice-icon">👻</span>
+      <div class="voice-name">Spectre</div>
+      <div class="voice-sub">Hantise</div>
+    </div>
+    <div class="voice-card" data-color="red" onclick="selectVoice(this,'Démon','−2.0x',0.2,1.8,true,false)">
+      <span class="voice-icon">😈</span>
+      <div class="voice-name">Démon</div>
+      <div class="voice-sub">Ultra grave</div>
+    </div>
+    <div class="voice-card" data-color="green" onclick="selectVoice(this,'Nain','1.5x',1.6,0.8,false,false)">
+      <span class="voice-icon">🧙</span>
+      <div class="voice-name">Nain</div>
+      <div class="voice-sub">Medium+</div>
+    </div>
+    <div class="voice-card" data-color="pink" onclick="selectVoice(this,'Diva','2.8x',2.3,0.65,false,false)">
+      <span class="voice-icon">🎭</span>
+      <div class="voice-name">Diva</div>
+      <div class="voice-sub">Opéra</div>
+    </div>
+  </div>
+
+  <!-- Effects Toggles -->
+  <div class="section-title">Effets actifs</div>
+  <div class="effects-row">
+    <div class="effect-toggle" id="fx-robot" onclick="toggleFX('robot')">
+      <div class="dot"></div>ROBOT
+    </div>
+    <div class="effect-toggle" id="fx-reverb" onclick="toggleFX('reverb')">
+      <div class="dot"></div>REVERB
+    </div>
+    <div class="effect-toggle" id="fx-distort" onclick="toggleFX('distort')">
+      <div class="dot"></div>DISTORTION
+    </div>
+    <div class="effect-toggle" id="fx-pitch2" onclick="toggleFX('pitch2')">
+      <div class="dot"></div>OCTAVE -1
+    </div>
+    <div class="effect-toggle" id="fx-chorus" onclick="toggleFX('chorus')">
+      <div class="dot"></div>CHORUS
+    </div>
+  </div>
+
+  <!-- Params -->
+  <div class="section-title">Paramètres</div>
+  <div class="params-card">
+    <div class="param-row">
+      <span class="param-label">Pitch</span>
+      <input type="range" class="param-slider" id="sl-pitch" min="0.1" max="3.0" step="0.05" value="1.0" oninput="onSlider(this,'pitch')">
+      <span class="param-val" id="v-pitch">1.0</span>
+    </div>
+    <div class="param-row">
+      <span class="param-label">Vitesse</span>
+      <input type="range" class="param-slider" id="sl-speed" min="0.5" max="2.0" step="0.05" value="1.0" oninput="onSlider(this,'speed')">
+      <span class="param-val" id="v-speed">1.0</span>
+    </div>
+    <div class="param-row">
+      <span class="param-label">Volume</span>
+      <input type="range" class="param-slider" id="sl-vol" min="0.0" max="2.0" step="0.05" value="1.0" oninput="onSlider(this,'vol')">
+      <span class="param-val" id="v-vol">1.0</span>
+    </div>
+    <div class="param-row">
+      <span class="param-label">Reverb</span>
+      <input type="range" class="param-slider" id="sl-reverb" min="0" max="1.0" step="0.05" value="0" oninput="onSlider(this,'reverb')">
+      <span class="param-val" id="v-reverb">0.0</span>
+    </div>
+  </div>
+
+  <!-- Record Timer -->
+  <div class="rec-timer" id="recTimer">00:00</div>
+
+  <!-- Big Record Button -->
+  <div class="record-wrap">
+    <div class="record-btn" id="recBtn" onclick="toggleRecord()">
+      <div class="record-inner" id="recInner"></div>
+    </div>
+    <div class="record-hint" id="recHint">APPUYER POUR COMMENCER</div>
+  </div>
+
+</div>
+
+<!-- Bottom Nav -->
+<div class="bottom-nav">
+  <div class="nav-item active" id="nav-home">
+    <div class="nav-icon">🎙</div>
+    <div class="nav-label">Voix</div>
+  </div>
+  <div class="nav-item" id="nav-rec" onclick="showToast('Historique bientôt disponible')">
+    <div class="nav-icon">📼</div>
+    <div class="nav-label">Enregistrements</div>
+  </div>
+  <div class="nav-item" id="nav-settings" onclick="showToast('Paramètres bientôt disponibles')">
+    <div class="nav-icon">⚙️</div>
+    <div class="nav-label">Réglages</div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- Permission Modal -->
+<div class="modal-overlay" id="permModal">
+  <div class="modal">
+    <div class="modal-icon">🎙</div>
+    <div class="modal-title">Accès au micro</div>
+    <div class="modal-text">VoxShift a besoin d'accéder à ton microphone pour modifier ta voix en temps réel.</div>
+    <button class="btn-primary" onclick="requestMic()">Autoriser le microphone</button>
+    <button class="btn-secondary" onclick="closeModal()">Plus tard</button>
+  </div>
+</div>
+
+<script>
+// ── Audio Engine ──────────────────────────────────────────────
+let audioCtx = null, micStream = null, sourceNode = null;
+let gainNode = null, pitchShift = 1.0, reverbWet = 0;
+let analyser = null, animFrame = null;
+let isRecording = false, recInterval = null, recSecs = 0;
+let callInterval = null, callSecs = 0;
+let currentMode = 'micro';
+let fxState = { robot: false, reverb: false, distort: false, pitch2: false, chorus: false };
+let destNode = null;
+
+// ── Canvas Visualizer ─────────────────────────────────────────
+const canvas = document.getElementById('viz');
+const ctx2 = canvas.getContext('2d');
+let dataArray, bufLen;
+
+function drawViz() {
+  animFrame = requestAnimationFrame(drawViz);
+  if (!analyser) { drawIdle(); return; }
+  analyser.getByteTimeDomainData(dataArray);
+  ctx2.fillStyle = '#12121a';
+  ctx2.fillRect(0, 0, canvas.width, canvas.height);
+  ctx2.lineWidth = 2;
+  const grad = ctx2.createLinearGradient(0, 0, canvas.width, 0);
+  grad.addColorStop(0, '#7c3aed');
+  grad.addColorStop(0.5, '#06b6d4');
+  grad.addColorStop(1, '#f59e0b');
+  ctx2.strokeStyle = grad;
+  ctx2.beginPath();
+  const slw = canvas.width / bufLen;
+  let x = 0;
+  for (let i = 0; i < bufLen; i++) {
+    const v = dataArray[i] / 128.0;
+    const y = v * canvas.height / 2;
+    i === 0 ? ctx2.moveTo(x, y) : ctx2.lineTo(x, y);
+    x += slw;
+  }
+  ctx2.stroke();
+  // volume
+  let sum = 0;
+  for (let i = 0; i < bufLen; i++) sum += Math.abs(dataArray[i] - 128);
+  const avg = sum / bufLen;
+  const db = avg > 0 ? Math.round(20 * Math.log10(avg / 128)) : -Infinity;
+  document.getElementById('volVal').textContent = isFinite(db) ? db + ' dB' : '0 dB';
+}
+
+function drawIdle() {
+  ctx2.fillStyle = '#12121a';
+  ctx2.fillRect(0, 0, canvas.width, canvas.height);
+  ctx2.strokeStyle = '#2a2a3e';
+  ctx2.lineWidth = 1.5;
+  ctx2.beginPath();
+  ctx2.moveTo(0, canvas.height / 2);
+  ctx2.lineTo(canvas.width, canvas.height / 2);
+  ctx2.stroke();
+}
+
+drawIdle();
+
+// ── Voice Presets ──────────────────────────────────────────────
+function selectVoice(el, name, pitchLabel, pitch, speed, robot, reverb) {
+  document.querySelectorAll('.voice-card').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  pitchShift = pitch;
+  document.getElementById('sl-pitch').value = pitch;
+  document.getElementById('v-pitch').textContent = pitch.toFixed(1);
+  document.getElementById('sl-speed').value = speed;
+  document.getElementById('v-speed').textContent = speed.toFixed(1);
+  document.getElementById('pitchVal').textContent = pitchLabel;
+  document.getElementById('effectBadge').textContent = name.toUpperCase();
+  if (robot !== undefined) {
+    fxState.robot = robot;
+    document.getElementById('fx-robot').classList.toggle('on', robot);
+    document.querySelector('#fx-robot .dot').style.background = robot ? 'var(--accent2)' : 'var(--muted)';
+  }
+  if (reverb !== undefined) {
+    fxState.reverb = reverb;
+    reverbWet = reverb ? 0.4 : 0;
+    document.getElementById('sl-reverb').value = reverbWet;
+    document.getElementById('v-reverb').textContent = reverbWet.toFixed(1);
+    document.getElementById('fx-reverb').classList.toggle('on', reverb);
+    document.querySelector('#fx-reverb .dot').style.background = reverb ? 'var(--accent2)' : 'var(--muted)';
+  }
+  if (gainNode) gainNode.gain.value = parseFloat(document.getElementById('sl-vol').value);
+  showToast('Voix : ' + name + ' activée');
+}
+
+// ── FX Toggles ─────────────────────────────────────────────────
+function toggleFX(name) {
+  fxState[name] = !fxState[name];
+  const el = document.getElementById('fx-' + name);
+  el.classList.toggle('on', fxState[name]);
+  el.querySelector('.dot').style.background = fxState[name] ? 'var(--accent2)' : 'var(--muted)';
+  if (name === 'reverb') { reverbWet = fxState.reverb ? 0.4 : 0; document.getElementById('sl-reverb').value = reverbWet; document.getElementById('v-reverb').textContent = reverbWet.toFixed(1); }
+  showToast((fxState[name] ? '✓ ' : '✗ ') + name.charAt(0).toUpperCase() + name.slice(1) + (fxState[name] ? ' ON' : ' OFF'));
+}
+
+// ── Sliders ────────────────────────────────────────────────────
+function onSlider(el, type) {
+  const v = parseFloat(el.value);
+  if (type === 'pitch') { pitchShift = v; document.getElementById('v-pitch').textContent = v.toFixed(1); document.getElementById('pitchVal').textContent = (v >= 1 ? '+' : '') + (v - 1).toFixed(1) + 'x'; }
+  if (type === 'speed') document.getElementById('v-speed').textContent = v.toFixed(1);
+  if (type === 'vol') { document.getElementById('v-vol').textContent = v.toFixed(1); if (gainNode) gainNode.gain.value = v; }
+  if (type === 'reverb') { reverbWet = v; document.getElementById('v-reverb').textContent = v.toFixed(1); }
+}
+
+// ── Record / Mic ───────────────────────────────────────────────
+function toggleRecord() {
+  if (!isRecording) startMic();
+  else stopMic();
+}
+
+async function startMic() {
+  try {
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    sourceNode = audioCtx.createMediaStreamSource(micStream);
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 512;
+    bufLen = analyser.frequencyBinCount;
+    dataArray = new Uint8Array(bufLen);
+    gainNode = audioCtx.createGain();
+    gainNode.gain.value = parseFloat(document.getElementById('sl-vol').value);
+    sourceNode.connect(analyser);
+    analyser.connect(gainNode);
+    gainNode.connect(audioCtx.destination);
+    isRecording = true;
+    recSecs = 0;
+    recInterval = setInterval(() => { recSecs++; document.getElementById('recTimer').textContent = fmt(recSecs); }, 1000);
+    document.getElementById('recBtn').classList.add('recording');
+    document.getElementById('recTimer').classList.add('show');
+    document.getElementById('recHint').textContent = 'APPUYER POUR ARRÊTER';
+    setStatus('recording');
+    startLatencySim();
+    showToast('Microphone actif – voix en direct');
+  } catch(e) {
+    document.getElementById('permModal').classList.add('show');
+  }
+}
+
+function stopMic() {
+  if (micStream) micStream.getTracks().forEach(t => t.stop());
+  if (audioCtx) audioCtx.close();
+  audioCtx = null; micStream = null; sourceNode = null; gainNode = null; analyser = null;
+  clearInterval(recInterval);
+  isRecording = false;
+  document.getElementById('recBtn').classList.remove('recording');
+  document.getElementById('recTimer').classList.remove('show');
+  document.getElementById('recHint').textContent = 'APPUYER POUR COMMENCER';
+  setStatus('idle');
+  document.getElementById('latency').textContent = '-- ms';
+  document.getElementById('volVal').textContent = '0 dB';
+  showToast('Microphone arrêté');
+}
+
+function fmt(s) {
+  return String(Math.floor(s/60)).padStart(2,'0') + ':' + String(s%60).padStart(2,'0');
+}
+
+// ── Status ─────────────────────────────────────────────────────
+function setStatus(state) {
+  const dot = document.getElementById('statusDot');
+  const txt = document.getElementById('statusText');
+  dot.className = 'status-dot ' + (state === 'idle' ? '' : state);
+  txt.className = 'status-text ' + (state === 'idle' ? '' : state);
+  txt.textContent = state === 'idle' ? 'Inactif' : state === 'active' ? 'Actif' : 'En écoute...';
+}
+
+function startLatencySim() {
+  setInterval(() => {
+    if (isRecording) {
+      const lat = Math.floor(Math.random() * 15 + 8);
+      document.getElementById('latency').textContent = lat + ' ms';
+    }
+  }, 1200);
+}
+
+// ── Mode Tabs ──────────────────────────────────────────────────
+function setMode(m) {
+  currentMode = m;
+  ['micro','appel','video'].forEach(t => {
+    document.getElementById('tab-'+t).classList.toggle('active', t === m);
+  });
+  const banner = document.getElementById('callBanner');
+  if (m === 'appel') {
+    banner.classList.add('visible');
+    callSecs = 0;
+    clearInterval(callInterval);
+    callInterval = setInterval(() => { callSecs++; document.getElementById('callTimer').textContent = fmt(callSecs); }, 1000);
+    showToast('Mode Appel vocal activé');
+  } else if (m === 'video') {
+    banner.classList.remove('visible');
+    showToast('Mode Appel vidéo activé');
+  } else {
+    banner.classList.remove('visible');
+    clearInterval(callInterval);
+  }
+}
+
+function endCall() {
+  clearInterval(callInterval);
+  document.getElementById('callBanner').classList.remove('visible');
+  setMode('micro');
+  showToast('Appel terminé');
+}
+
+// ── Permission Modal ───────────────────────────────────────────
+async function requestMic() {
+  document.getElementById('permModal').classList.remove('show');
+  setTimeout(startMic, 300);
+}
+
+function closeModal() {
+  document.getElementById('permModal').classList.remove('show');
+}
+
+// ── Toast ──────────────────────────────────────────────────────
+let toastTO = null;
+function showToast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTO);
+  toastTO = setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+// Start viz loop
+drawViz();
+</script>
+</body>
+</html>
